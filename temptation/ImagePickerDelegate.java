@@ -6,6 +6,7 @@ package io.flutter.plugins.imagepicker;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -22,6 +23,7 @@ import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.PluginRegistry;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -366,13 +368,6 @@ public class ImagePickerDelegate
       useFrontCamera(intent);
     }
 
-    boolean canTakePhotos = intentResolver.resolveActivity(intent);
-
-    if (!canTakePhotos) {
-      finishWithError("no_available_camera", "No cameras available for taking pictures.");
-      return;
-    }
-
     File imageFile = createTemporaryWritableImageFile();
     pendingCameraMediaUri = Uri.parse("file:" + imageFile.getAbsolutePath());
 
@@ -380,7 +375,18 @@ public class ImagePickerDelegate
     intent.putExtra(MediaStore.EXTRA_OUTPUT, imageUri);
     grantUriPermissions(intent, imageUri);
 
-    activity.startActivityForResult(intent, REQUEST_CODE_TAKE_IMAGE_WITH_CAMERA);
+    try {
+      activity.startActivityForResult(intent, REQUEST_CODE_TAKE_IMAGE_WITH_CAMERA);
+    } catch (ActivityNotFoundException e) {
+      try {
+        // If we can't delete the file again here, there's not really anything we can do about it.
+        //noinspection ResultOfMethodCallIgnored
+        imageFile.delete();
+      } catch (SecurityException exception) {
+        exception.printStackTrace();
+      }
+      finishWithError("no_available_camera", "No cameras available for taking pictures.");
+    }
   }
 
   private File createTemporaryWritableImageFile() {
